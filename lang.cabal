@@ -26,12 +26,15 @@ source-repository head
 library
   exposed-modules:
       Interpreter
+      IR.IRW
       IR.IRX
       IR.IRY
       IR.IRZ
       Lib
-      Parser
-      Translator
+      Parse
+      Parse.ParserLib
+      Parse.ParserPass1
+      Parse.ParserPass2
       Util
   other-modules:
       Paths_lang

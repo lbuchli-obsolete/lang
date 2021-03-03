@@ -1,0 +1,34 @@
+-- Line comment
+-- Function declaration with parsing priority
+-- the ':|' is a constraint on the arguments (gets typechecked)
+-- the priority thingy is optional, if it is left away a default value (1) gets used
+-- functions can also choose an associativity (L or R, default is L)
+::[1R] a:Int '+' b:Int -> res:Int
+:| a > 0
+:| b > 0
+:= result <- intAdd a b
+   result
+
+-- Type declaration
+<>[2] '[' t:* ']'
+<| t != Char
+<= t ':' ([ t ])
+<= '[]'
+
+-- a
+--   b
+--     c
+-- -> (a (b c))
+--
+-- a
+--   b
+--   c
+-- -> (a b c)
+--
+-- a
+-- b
+-- -> Illegal
+--
+-- v <- a
+-- b
+-- -> Legal, binding

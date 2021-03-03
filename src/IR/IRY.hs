@@ -4,7 +4,6 @@
 module IR.IRY where
 
 import           Util
-import           Translator
 import qualified IR.IRZ                        as Z
 import           Data.Bifunctor                 ( second )
 import           Data.Maybe                     ( mapMaybe )
@@ -17,6 +16,8 @@ data Binding = Binding Name [Name] Expr deriving Show
 data Expr = Seq Expr LPat Expr
           | Case Val [(CPat, Expr)]
           | Ap Name [Val]
+          | Store Val
+          | Fetch Name
           | Update Name Val
           | Unit Val
   deriving Show
@@ -34,11 +35,10 @@ data CPat = CPatCTag Const [Name]
           | CPatVar Name
   deriving Show
 
-instance Translatable IRY Z.IRZ where
-  translate (IRY bindings) =
-    (\(x, _, _) -> Z.IRZ . addApply . addEval $ x) <$> mapValuesResult
-      (\b n _ -> translateBinding b n [])
-      (bindings, 0, [])
+translate :: IRY -> Result String Z.IRZ
+translate (IRY bindings) =
+  (\(x, _, _) -> Z.IRZ . addApply . addEval $ x)
+    <$> mapValuesResult (\b n _ -> translateBinding b n []) (bindings, 0, [])
 
 type VarMap = [(String, Int)]
 type SSACtr = Int
@@ -97,6 +97,12 @@ translateExpr (Ap f args) n m = do
     , n''
     , m''
     )
+translateExpr (Store val) n m = do
+  ((val', pre_val), n', m') <- translateVal Read val n m
+  return (apply pre_val (Z.SExpr $ Z.Store val'), n', m')
+translateExpr (Fetch _name) n m = case lookup _name m of
+  Nothing -> Error $ "'" ++ _name ++ "' is not defined. (Fetch)"
+  Just x  -> Success (Z.SExpr $ Z.Fetch (name x), n, m)
 translateExpr (Update _name val) n m = case lookup _name m of
   Nothing -> Error $ "'" ++ _name ++ "' is not defined. (Update)"
   Just x  -> do
@@ -124,7 +130,8 @@ translateVal a (VTag v vals) n m = case lookup v m of
     ((vals', pre_vals), n', m') <- mapValue unzip
       <$> mapValuesResult (translateVal a) (vals, n, m)
     ((vals'', pre_vals'), n'', m'') <- Success $ toSVal (vals', n', m')
-    return ((Z.VTag (name x) vals'', concat pre_vals ++ pre_vals'), n'', m'')
+    return
+      ((Z.VTag (name x) vals'', concat pre_vals ++ pre_vals'), n'' + 1, m'')
 translateVal Read  (Tag c  ) n m = Success ((Z.Tag c, []), n, m)
 translateVal Read  (Empty  ) n m = Success ((Z.Empty, []), n, m)
 translateVal Write (Empty  ) n m = Success ((Z.Empty, []), n, m)
@@ -198,6 +205,7 @@ generateEval fs = Z.Binding
            , ("intPrint", ["p"])
            , ("intGT"   , ["c", "d"])
            , ("showHeap", [])
+           , ("error"   , [])
            ]
       ++ [(Z.CPatVar "_", Z.SExpr $ Z.Unit (Z.SVal $ Z.Var "v"))]
       )
@@ -212,7 +220,7 @@ generateEval fs = Z.Binding
       (Z.SVal $ Z.Var $ n ++ "_res")
       (Z.Seq (Z.Update "x" (Z.SVal $ Z.Var $ n ++ "_res"))
              (Z.Empty)
-             (Z.SExpr $ Z.Unit (Z.SVal $ Z.Var $ n ++ "_res"))
+             (Z.SExpr $ Z.Ap "#eval" [Z.Var $ n ++ "_res"])
       )
     )
 
@@ -327,7 +335,7 @@ example = IRY
       "main"
       []
       (Seq
-        (Ap "upto" [CTag "CInt" [Lit "1"], CTag "CInt" [Lit "20"]])
+        (Ap "upto" [CTag "#C#Int" [Lit "1"], CTag "#C#Int" [Lit "20"]])
         (Var "list")
         (Seq (Ap "sum" [Var "list"])
              (Var "result")
@@ -363,11 +371,11 @@ example = IRY
       ["l"]
       (Case
         (Var "l")
-        [ (CPatTag "CNil", Unit (CTag "CInt" [Lit "0"]))
+        [ (CPatTag "CNil", Unit (CTag "#C#Int" [Lit "0"]))
         , ( CPatCTag "CCons" ["t", "ts"]
           , (Seq
               (Ap "sum" [Var "ts"])
-              (CTag "CInt" [Var "r"])
+              (CTag "#C#Int" [Var "r"])
               (Seq (Ap "intAdd" [Var "t", Var "r"])
                    (Var "res")
                    (Unit (Var "res"))
@@ -376,5 +384,66 @@ example = IRY
           )
         ]
       )
+    )
+  ]
+
+translated :: IRY
+translated = IRY
+  [ Binding
+    "main"
+    []
+    (Seq
+      (Seq
+        (Store (Lit "1"))
+        (Var "#a0")
+        (Seq (Store (Lit "2")) (Var "#a1") (Ap "upto" [Var "#a0", Var "#a1"]))
+      )
+      (Var "#a2")
+      (Unit (Var "#a2"))
+    )
+  , Binding
+    "upto"
+    ["a", "b"]
+    (Seq
+      (Seq
+        (Seq
+          (Store (Var "a"))
+          (Var "#a2")
+          (Seq (Store (Var "b")) (Var "#a3") (Ap "intGT" [Var "#a2", Var "#a3"])
+          )
+        )
+        (Var "#a4")
+        (Case
+          (Var "#a4")
+          [ (CPatTag "CTrue", Store (Tag "CNil"))
+          , ( CPatTag "CFalse"
+            , Seq
+              (Store (Var "a"))
+              (Var "#a5")
+              (Seq
+                (Seq
+                  (Seq
+                    (Store (Var "a"))
+                    (Var "#a6")
+                    (Seq (Store (Lit "1"))
+                         (Var "#a7")
+                         (Ap "intAdd" [Var "#a6", Var "#a7"])
+                    )
+                  )
+                  (Var "#a8")
+                  (Seq (Store (Var "b"))
+                       (Var "#a9")
+                       (Ap "upto" [Var "#a8", Var "#a9"])
+                  )
+                )
+                (Var "#a10")
+                (Store (CTag "CCons" [Var "#a5", Var "#a10"]))
+              )
+            )
+          ]
+        )
+      )
+      (Var "#a11")
+      (Unit (Var "#a11"))
     )
   ]

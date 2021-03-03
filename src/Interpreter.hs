@@ -10,11 +10,11 @@ import           Data.Bifunctor                 ( first
 type Bindings = [(String, ([String], Expr))]
 type Heap = [(String, Val)]
 
-interpret :: IRZ -> Result String Val
+interpret :: IRZ -> Result String (Val, Heap)
 interpret (IRZ bs) = case lookup "main" bindings of
   Nothing            -> Error "No main found."
   Just (_ : _, _   ) -> Error "The main function cannot have arguments."
-  Just ([]   , body) -> fst <$> reduceExpr bindings heap body
+  Just ([]   , body) -> reduceExpr bindings heap body
  where
   bindings = map (\(Binding name vars body) -> (name, (vars, body))) bs
   heap     = []
@@ -26,7 +26,7 @@ reduceExpr bs h (Seq se pat e) = do
   result    <- reduceExpr bs h'' e
   return result
 reduceExpr bs h (Case v pats) =
-  (check (map (first (intoCPat bs h v)) pats) >>= match)
+  check (map (first (intoCPat bs h v)) pats) >>= match
  where
   match (h', body) = reduceExpr bs h' body
   check ((x, b) : xs) = ((\x' -> (x', b)) <$> x) <|> check xs
@@ -36,7 +36,7 @@ reduceSExpr :: Bindings -> Heap -> SExpr -> Result String (Val, Heap)
 reduceSExpr bs h (Ap "intAdd" [a, b]) = do
   a' <- getInt intTries bs h a
   b' <- getInt intTries bs h b
-  return (CTag "CInt" [Lit $ show $ a' + b'], h)
+  return (CTag "#C#Int" [Lit $ show $ a' + b'], h)
 reduceSExpr bs h (Ap "intGT" [a, b]) = do
   a' <- getInt intTries bs h a
   b' <- getInt intTries bs h b
@@ -44,6 +44,7 @@ reduceSExpr bs h (Ap "intGT" [a, b]) = do
 reduceSExpr _ h (Ap "showHeap" []) = Trace (show h) $ Success (Empty, h)
 reduceSExpr bs h (Ap "intPrint" [x]) =
   getInt intTries bs h x >>= \x' -> Trace (show x') $ Success (Empty, h)
+reduceSExpr _ _ (Ap "error" []) = error "Program invoked error."
 reduceSExpr bs h (Ap f args) =
   Trace ("Calling " ++ f ++ " :: " ++ show args) $ case lookup f bs of
     Nothing -> Error $ "Function '" ++ f ++ "' not found."
@@ -62,10 +63,9 @@ reduceSExpr bs h (Ap f args) =
   setVars (_ : _)        []       = Error "Too many arguments."
   setVars []             []       = Success []
 reduceSExpr _ h (Unit (SVal (Var val))) = case lookup val h of
-  Just x ->
-    let result = copy h x in Trace ("Returning " ++ show result) $ result
+  Just x  -> let result = copy h x in Trace ("Returning ") $ result
   Nothing -> Error $ "Variable '" ++ val ++ "' could not be found. (Unit)"
-reduceSExpr _ h (Unit val) = Trace ("Returning " ++ show result) $ result
+reduceSExpr _ h (Unit val) = Trace ("Returning ") $ result
   where result = copy h val
 reduceSExpr _ h (Store (SVal (Var val))) = case lookup val h of
   Just x  -> Success (x, h)
@@ -159,9 +159,10 @@ copy h (SVal sval   ) = first SVal <$> copySVal h sval
 copy _ other          = Success (other, [])
 
 copySVal :: Heap -> SVal -> Result String (SVal, Heap)
-copySVal _ (Lit lit) = Success (Lit lit, [])
-copySVal h (Var var) = case lookup var h of
-  Just x -> first Var . (\(v, h') -> allocCpy var v h') <$> copy h x
+copySVal _ (Lit lit) = Trace "SVal copy lit" $ Success (Lit lit, [])
+copySVal h (Var var) = Trace "SVal copy var" $ case lookup var h of
+  Just x ->
+    first Var . (\(v, h') -> second (++ h') $ allocCpy var v h) <$> copy h x
   Nothing ->
     Error
       $  "Variable "
@@ -178,20 +179,24 @@ intTries :: Int
 intTries = 100
 
 getInt :: Int -> Bindings -> Heap -> SVal -> Result String Int
-getInt _     _  _ (Lit x) = Success $ read x
-getInt tries bs h (Var v) = case lookup v h of
-  Just (CTag "CInt" [x]) -> getInt (tries - 1) bs h x
-  Just (SVal x         ) -> getInt (tries - 1) bs h x
-  Just _                 -> try_eval
+getInt _ _ _ (Lit x)                  = Success $ read x
+getInt tries bs h (Var v) | tries > 0 = case lookup v h of
+  Just (CTag "#C#Int" [x]) -> getInt (tries - 1) bs h x
+  Just (SVal x           ) -> getInt (tries - 1) bs h x
+  Just _                   -> try_eval
   Nothing -> Error $ "Could not find variable '" ++ v ++ "'. (getInt)"
  where
   try_eval = reduceSExpr bs h (Ap "#eval" [Var v]) >>= \(val, h') ->
     case val of
-      (CTag "CInt" [x]) -> getInt (tries - 1) bs h x
-      (SVal sval      ) -> getInt (tries - 1) bs h' sval
-      _                 -> Error "This doesn't seem to be an int"
+      (CTag "#C#Int" [x]) -> getInt (tries - 1) bs h x
+      (SVal sval) -> getInt (tries - 1) bs h' sval
+      x -> Error $ "This doesn't seem to be an int: " ++ show x
+getInt _ _ _ v = Error ("getInt tries exhausted on: " ++ show v)
 
 alloc :: Var -> Val -> Heap -> Heap
+alloc k (SVal (Var v)) h = case lookup v h of
+  Nothing -> error "Heap discrepancy"
+  Just x  -> alloc k x h
 alloc k v h = case lookup k h of
   Nothing -> (k, v) : h
   Just _  -> map replaceMatch h
@@ -201,45 +206,5 @@ alloc k v h = case lookup k h of
 
 allocCpy :: Var -> Val -> Heap -> (Var, Heap)
 allocCpy k v h = case lookup k h of
-  Nothing -> (k, (k, v) : h)
+  Nothing -> (k, (k, v) : [])
   Just _  -> allocCpy (k ++ "'") v h
-
-
-{--
-OUTPUT TODO DEBUG
-'Calling eval :: [Var "t4"]'
-  'Calling sum :: [Var "c"]'
-    'Calling eval :: [Var "l"]'
-      'Calling upto :: [Var "a",Var "b"]'
-        'Calling eval :: [Var "m"]'
-          'Returning  (CTag "CInt" [Lit "1"],[])'
-        'Calling eval :: [Var "n"]'
-          'Returning  (CTag "CInt" [Lit "2"],[])'
-        'Returning  (CTag "CCons" [1,Fupto 2 2])'
-      'Returning  (CTag "CCons" [1,Fupto 2 2])'
-    'Calling eval :: [Var "t"]'
-      'Returning  (CTag "CInt" [Lit "1"],[])'
-    'Calling sum :: [Var "ts"]'
-      'Calling eval :: [Var "l"]'
-        'Calling upto :: [Var "a",Var "b"]'
-          'Calling eval :: [Var "m"]'
-            'Returning  (CTag "CInt" [2])'
-          'Calling eval :: [Var "n"]'
-            'Returning  (CTag "CInt" [Lit "2"],[])'
-          'Returning  (CTag "CCons" [3,Fupto 3 2])' -- TODO why 3? m == m''?
-        'Returning  (CTag "CCons" [3, Fupto 3 2])'
-      'Calling eval :: [Var "t"]'
-        'Returning  (CTag "CInt" [3])'
-      'Calling sum :: [Var "ts"]'
-        'Calling eval :: [Var "l"]'
-          'Calling upto :: [Var "a",Var "b"]'
-            'Calling eval :: [Var "m"]'
-              'Returning  (CTag "CInt" [3])'
-            'Calling eval :: [Var "n"]'
-              'Returning  (CTag "CInt" [Lit "2"],[])'
-            'Returning  (Tag "CNil",[])'
-          'Returning  (Tag "CNil",[])'
-        'Returning  (CTag "CInt" [Lit "0"],[])'
-      'Returning  (CTag "CInt" [Lit "6"],[])'
-    CTag "CInt" [Lit "6"]
---}

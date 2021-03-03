@@ -1,8 +1,13 @@
 module Main where
 
 import           Lib
+import           System.IO
+
+file :: String
+file = "/home/lukas/workspace/haskell/lang/lang-src/devsrc"
 
 main :: IO ()
-main = -- print $ interpret example2
-  print $ translate example >>= interpret
-  -- print $ interpret example2
+main = do
+  handle   <- openFile file ReadMode
+  contents <- hGetContents handle
+  print $ parse contents >>= translate >>= interpret
