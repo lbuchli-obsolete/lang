@@ -33,10 +33,20 @@ instance Ord FPDecl where
 
 parse :: String -> Result String FPIRW
 parse s = first
-  (\(pos, msg) -> (show $ row pos) ++ ":" ++ (show $ col pos) ++ " -- " ++ msg)
-  (   (\(_, _, result) -> sort result)
+  (\(pos, msg) ->
+    (show $ row pos + 1) ++ ":" ++ (show $ col pos) ++ " -- " ++ msg
+  )
+  (   (\(_, _, result) -> sort (result ++ predefined))
   <$> parseSrc (optional _wsNL *> pFile <* optional _wsNL <* eof) s
   )
+ where
+  predefined =
+    [ FPDecl Function 1 L [Right "intAdd", Left (), Left ()]
+    , FPDecl Function 1 L [Right "intGT", Left (), Left ()]
+    , FPDecl Function 1 L [Right "showHeap"]
+    , FPDecl Function 1 L [Right "intPrint", Left ()]
+    , FPDecl Function 1 L [Right "error"]
+    ]
 
 pFile :: Parser String Error FPIRW
 pFile =
@@ -100,5 +110,9 @@ pArg =
     *> (parse_brackets <|> parse_stype)
  where
   parse_brackets =
-    void $ str "(" *> sepBy ws (parse_brackets <|> parse_stype) <* str ")"
+    void $ pKeyword "(" *> sepBy ws (parse_brackets <|> parse_stype) <* pKeyword
+      ")"
   parse_stype = void $ some (noneOf "'#_ \n\t()") <* ws
+
+pKeyword :: String -> Parser String Error String
+pKeyword s = str s <* _ws

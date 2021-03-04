@@ -4,6 +4,7 @@ import qualified IR.IRX                        as X
 import           Util
 
 data IRW = IRW [TypeDef] [FuncDef]
+   deriving Show
 
 type Const = String
 type Lit = String
@@ -14,31 +15,33 @@ data FuncDef = FuncDef {
   _bargs :: [(Name, Typed)],
   _bconstraints :: [Typed],
   _bbody :: Typed
-}
+} deriving Show
 
 data TypeDef = TypeDef {
-              _tname :: Name,
-              _targs :: [(Name, Typed)],
-              _tconstraints :: [Typed],
-              _tbody :: [ConstrDef]
-                       }
+  _tname :: Name,
+  _targs :: [(Name, Typed)],
+  _tconstraints :: [Typed],
+  _tbody :: [ConstrDef]
+} deriving Show
 
 data ConstrDef = ConstrDef {
-              _cname :: Name,
-              _cargs :: [(Name, Typed)],
-              _cconstraints :: [Typed]
-                           }
+  _cname :: Name,
+  _cargs :: [(Name, Typed)],
+  _cconstraints :: [Typed]
+} deriving Show
 
 data Type = TUnknown
           | TStr
           | TInt
           | TBool
           | RTT Name [Typed]
+ deriving Show
 
 data Constr = CInt Int
             | CStr String
             | CBool Bool
             | RTC Name [Typed]
+ deriving Show
 
 data Expr = Seq Typed Pat Typed
           | Lambda Pat Typed
@@ -46,15 +49,18 @@ data Expr = Seq Typed Pat Typed
           | Ap Typed [Typed]
           | Constr Name [Typed]
           | Var Name
+ deriving Show
 
 data Pat = PatVar Name
          | PatCTag Const [Pat]
          | PatTag Const
          | PatLit Lit
+ deriving Show
 
 data Typed = TExpr Type Expr
            | TType Type
            | TConstr Type Constr
+ deriving Show
 
 translate :: IRW -> Result String X.IRX
 translate irw = typeCheck irw >>= translate_irw

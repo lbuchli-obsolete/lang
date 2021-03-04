@@ -99,12 +99,19 @@ data Pos = Pos {
   col :: Int
 } deriving (Eq, Show)
 
+instance Ord Pos where
+  compare a b = if by_row == EQ then by_col else by_row
+   where
+    by_row = compare (row a) (row b)
+    by_col = compare (col a) (col b)
+
 addPos :: Pos -> Pos -> Pos
 addPos (Pos x y) (Pos x' y') = Pos (x + x') (y + y')
 
 posOffsetOf :: String -> Pos
-posOffsetOf s = Pos (length s - Data.Maybe.fromMaybe 0 (elemIndex '\n' s))
-                    (length $ filter (== '\n') s)
+posOffsetOf s = Pos
+  (length $ filter (== '\n') s)
+  (Data.Maybe.fromMaybe (length s) $ elemIndex '\n' $ reverse s)
 
 type State i e a = Result (Pos, e) (i, Pos, a)
 
@@ -130,7 +137,14 @@ instance Applicative (Parser i e) where
 
 instance Alternative (Parser i e) where
   empty = Parser $ const empty
-  (<|>) a b = Parser $ \i -> parseSrc a i <|> parseSrc b i
+  (<|>) pa pb = Parser $ \i -> pick (parseSrc pa i) (parseSrc pb i)
+   where
+    pick (Trace m a) b           = Trace m $ pick a b
+    pick (Success a) _           = Success a
+    pick (Error   a) (Trace m b) = Trace m $ pick (Error a) b
+    pick (Error   _) (Success b) = Success b
+    pick a@(Error (pos_a, _)) b@(Error (pos_b, _)) =
+      if compare pos_a pos_b == LT then b else a -- choose the one that came the farthest
 
 instance Monad (Parser i e) where
   (>>=) pa pb = Parser $ parseSrc pa >=> \(i', p, a) ->

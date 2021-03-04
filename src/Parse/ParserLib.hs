@@ -26,7 +26,7 @@ _ws = _wsNL *> ws <|> (const (-1) <$> ws)
 str :: String -> Parser String Error String
 str s = Parser $ \i -> if take len i == s
   then Success (drop len i, posOffsetOf s, s)
-  else parseError ("Input does not match '" ++ s ++ "'")
+  else parseError ("Input does not match '" ++ s ++ "': " ++ take 20 i ++ "...")
   where len = length s
 
 noneOf :: [Char] -> Parser String Error Char
@@ -49,6 +49,9 @@ noMatch p = Parser $ \i -> case (toEither $ parseSrc p i) of
   Left  _ -> Success (i, Pos 0 0, ())
   Right _ -> parseError "Should not match"
 
+-- serves to mark not parsing a as an error if b doesn't match afterwards
+manyThen :: Parser i e a -> Parser i e b -> Parser i e [a]
+manyThen a b = (:) <$> a <*> manyThen a b <|> const [] <$> b
 
 eof :: Parser String Error ()
 eof = Parser $ \i -> if null i
@@ -56,11 +59,14 @@ eof = Parser $ \i -> if null i
   else Error (Pos 0 0, "There is still input left: " ++ shorten i)
   where shorten s = take 16 s ++ if length s > 16 then "..." else ""
 
+pEmpty :: Parser i e ()
+pEmpty = Parser $ \i -> Success (i, Pos 0 0, ())
+
 parseError :: String -> Result (Pos, String) a
 parseError s = Error (Pos 0 0, s)
 
 pFail :: String -> Parser i Error a
 pFail msg = Parser $ \_ -> parseError msg
 
-pEmpty :: Parser i e ()
-pEmpty = Parser $ \i -> Success (i, Pos 0 0, ())
+(<?>) :: Parser i Error a -> Error -> Parser i String a
+(<?>) p m = pFail m <|> p

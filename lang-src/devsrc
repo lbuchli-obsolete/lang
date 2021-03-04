@@ -1,2 +1,2 @@
-:: 'Guten Tag' a:Hallo
-:= Sali Int
+:: 'main'
+:= intAdd 2 3
