@@ -33,17 +33,32 @@ reduceExpr bs h (Case v pats) =
   check []            = Error "No case matches."
 reduceExpr bs h (SExpr se) = reduceSExpr bs h se
 reduceSExpr :: Bindings -> Heap -> SExpr -> Result String (Val, Heap)
-reduceSExpr bs h (Ap "intAdd" [a, b]) = do
+reduceSExpr bs h (Ap "intAdd__" [a, b]) = do
   a' <- getInt intTries bs h a
   b' <- getInt intTries bs h b
   return (CTag "#C#Int" [Lit $ show $ a' + b'], h)
-reduceSExpr bs h (Ap "intGT" [a, b]) = do
+reduceSExpr bs h (Ap "intGT__" [a, b]) = do
   a' <- getInt intTries bs h a
   b' <- getInt intTries bs h b
   return (Tag $ if a' > b' then "CTrue" else "CFalse", h)
 reduceSExpr _ h (Ap "showHeap" []) = Trace (show h) $ Success (Empty, h)
-reduceSExpr bs h (Ap "intPrint" [x]) =
+reduceSExpr bs h (Ap "intPrint_" [x]) =
   getInt intTries bs h x >>= \x' -> Trace (show x') $ Success (Empty, h)
+reduceSExpr bs h (Ap "strLength_" [s]) = do
+  s' <- getStr strTries bs h s
+  return (CTag "#C#Int" [Lit $ show $ length s'], h)
+reduceSExpr bs h (Ap "strConcat__" [a, b]) = do
+  a' <- getStr strTries bs h a
+  b' <- getStr strTries bs h b
+  return (CTag "#C#Str" [Lit $ a' ++ b'], h)
+reduceSExpr bs h (Ap "strTake__" [x, s]) = do
+  x' <- getInt intTries bs h x
+  s' <- getStr strTries bs h s
+  return (CTag "#C#Str" [Lit $ take x' s'], h)
+reduceSExpr bs h (Ap "strDrop__" [x, s]) = do
+  x' <- getInt intTries bs h x
+  s' <- getStr strTries bs h s
+  return (CTag "#C#Str" [Lit $ drop x' s'], h)
 reduceSExpr _ _ (Ap "error" []) = error "Program invoked error."
 reduceSExpr bs h (Ap f args) =
   Trace ("Calling " ++ f ++ " :: " ++ show args) $ case lookup f bs of
@@ -192,6 +207,24 @@ getInt tries bs h (Var v) | tries > 0 = case lookup v h of
       (SVal sval) -> getInt (tries - 1) bs h' sval
       x -> Error $ "This doesn't seem to be an int: " ++ show x
 getInt _ _ _ v = Error ("getInt tries exhausted on: " ++ show v)
+
+strTries :: Int
+strTries = 100
+
+getStr :: Int -> Bindings -> Heap -> SVal -> Result String String
+getStr _ _ _ (Lit x)                  = Success x
+getStr tries bs h (Var v) | tries > 0 = case lookup v h of
+  Just (CTag "#C#Str" [x]) -> getStr (tries - 1) bs h x
+  Just (SVal x           ) -> getStr (tries - 1) bs h x
+  Just _                   -> try_eval
+  Nothing -> Error $ "Could not find variable '" ++ v ++ "'. (getStr)"
+ where
+  try_eval = reduceSExpr bs h (Ap "#eval" [Var v]) >>= \(val, h') ->
+    case val of
+      (CTag "#C#Str" [x]) -> getStr (tries - 1) bs h x
+      (SVal sval) -> getStr (tries - 1) bs h' sval
+      x -> Error $ "This doesn't seem to be a string: " ++ show x
+getStr _ _ _ v = Error ("getStr tries exhausted on: " ++ show v)
 
 alloc :: Var -> Val -> Heap -> Heap
 alloc k (SVal (Var v)) h = case lookup v h of

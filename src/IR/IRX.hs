@@ -13,7 +13,7 @@ type Lit = String
 type Name = String
 data Binding = Binding Name [Name] Expr deriving Show
 data Expr = Seq Expr Pat Expr
-          | Lambda Pat Expr
+          | Lambda [Pat] Expr
           | Case Expr [(Pat, Expr)]
           | Ap Expr [Expr]
           | CTag Const [Expr]
@@ -50,7 +50,16 @@ translate (IRX bindings) =
   translate_bindings _ [] = Success []
   binding_names =
     map (\(Binding _name _ _) -> _name) bindings
-      ++ ["intAdd", "intGT", "showHeap", "intPrint", "error"]
+      ++ [ "intAdd__"
+         , "intGT__"
+         , "showHeap"
+         , "intPrint_"
+         , "strConcat__"
+         , "strLength_"
+         , "strTake__"
+         , "strDrop__"
+         , "error"
+         ]
 
 type AssignCtr = Int
 
@@ -68,7 +77,8 @@ translateExpr bns n (Seq a pat b) = do
   (b'  , bs'  , n''') <- translateExpr bns n'' b
   return (Y.Seq a' pat' (pre_b b'), bs ++ bs', n''')
 translateExpr bns n (Lambda pat expr) = do
-  return undefined -- TODO is it better to reform into binding here?
+  return undefined -- TODO make lambda separate binding
+  -- external values not passed as arguments have to be cloned in
 translateExpr bns n (Case expr matches) = do
   (pre_case, bs, v, n') <- asVar bns n expr
   (_case, bs', n'')     <- translatePatCase bns n' v matches
@@ -113,46 +123,67 @@ translatePatLPat bns n (PatCTag c pats) = do
 translatePatLPat _ n (PatLit lit) = Success (Y.Lit lit, id, n)
 translatePatLPat _ n (PatTag c  ) = Success (Y.Tag c, id, n)
 
+-- lets hope i'll never have to touch this again
 translatePatCase
   :: [Name]
   -> AssignCtr
   -> String
   -> [(Pat, Expr)]
   -> Result String (Y.Expr, [Y.Binding], AssignCtr)
-translatePatCase bns n var matches = do
-  (branches, bs, n') <- modifyBranches n exploded
-  return (Y.Case (Y.Var var) branches, bs, n')
+translatePatCase bns n var branches = do
+  (pats, bs, n', bodies) <- modify_branches n branches
+  return (Y.Case (Y.Var var) (zip pats bodies), bs, n')
  where
-  exploded = zip matches $ map (explodePat n . fst) matches
+  modify_branch _n (PatVar v      ) body = (Y.CPatVar v, body, _n)
+  modify_branch _n (PatCTag c pats) body = (Y.CPatCTag c pats', body', n')
+   where
+    (pats', body', n') = foldr combine ([], body, _n) pats
+    combine pat (_pats, _body, __n) =
+      (\(pat', _body', _n') -> (pat' : _pats, _body', _n')) $ wrap __n pat _body
+    wrap __n (PatVar v) _body = (v, _body, __n)
+    wrap __n pat _body =
+      let (pat', _body', __n') = modify_branch __n pat _body
+      in  (name __n', Y.Case (Y.Var $ name __n') [(pat', _body')], __n' + 1)
+  modify_branch _n (PatTag c  ) body = (Y.CPatTag c, body, _n)
+  modify_branch _n (PatLit lit) body = (Y.CPatLit lit, body, _n)
 
-  modifyBranch ((_, expr), (pat, pre, _n)) = do
-    (expr', bs, n') <- translateExpr bns _n expr
-    return ((pat, pre expr'), bs, n')
+  modify_branch_or _n (PatVar v) body _ = (Y.CPatVar v, body, _n)
+  modify_branch_or _n (PatCTag c pats) body rem_expr =
+    (Y.CPatVar (name n'), body'', n' + 1)
+   where
+    (pats', body', n') = foldr combine ([], body, _n) pats
+    combine pat (_pats, _body, __n) =
+      (\(pat', _body', _n') -> (pat' : _pats, _body', _n')) $ wrap __n pat _body
+    wrap __n (PatVar v) _body = (v, _body, __n)
+    wrap __n pat _body =
+      let (pat', _body', __n') = modify_branch_or __n pat _body rem_expr
+      in  (name __n', Y.Case (Y.Var $ name __n') [(pat', _body')], __n' + 1)
+    body'' = Y.Case
+      (Y.Var $ name n')
+      [(Y.CPatCTag c pats', body'), (Y.CPatVar "#irx_pat_other", rem_expr)]
+  modify_branch_or _n (PatTag c) body rem_expr =
+    (Y.CPatVar (name _n), body', _n + 1)
+   where
+    body' = Y.Case
+      (Y.Var $ name _n)
+      [(Y.CPatTag c, body), (Y.CPatVar "#irx_pat_other", rem_expr)]
+  modify_branch_or _n (PatLit lit) body rem_expr =
+    (Y.CPatVar (name _n), body', _n + 1)
+   where
+    body' = Y.Case
+      (Y.Var $ name _n)
+      [(Y.CPatLit lit, body), (Y.CPatVar "#irx_pat_other", rem_expr)]
 
-  modifyBranches _n (x : xs) = do
-    (branch  , bs , n' ) <- modifyBranch x
-    (branches, bs', n'') <- modifyBranches n' xs
-    return (branch : branches, bs ++ bs', n'')
-  modifyBranches _n [] = Success ([], [], _n)
-
-explodePat :: AssignCtr -> Pat -> (Y.CPat, Y.Expr -> Y.Expr, AssignCtr)
-explodePat n (PatVar _name) = (Y.CPatVar _name, id, n)
-explodePat n (PatCTag c pats) =
-  let (vs, pre, n') = make_vars n pats in (Y.CPatCTag c vs, pre, n')
- where
-  make_var _n (PatVar _name) = (_name, id, _n)
-  make_var _n other          = wrap_case $ explodePat _n other
-
-  make_vars _n (pat : _pats) =
-    let (v, pre, n') = make_var _n pat
-    in  let (vs, pre', n'') = make_vars n' _pats in (v : vs, pre' . pre, n'')
-  make_vars _n [] = ([], id, _n)
-
-  wrap_case (pat, pre, _n) =
-    (name _n, (\b -> Y.Case (Y.Var $ name _n) [(pat, pre b)]), _n + 1)
-
-explodePat n (PatTag c  ) = (Y.CPatTag c, id, n)
-explodePat n (PatLit lit) = (Y.CPatLit lit, id, n)
+  modify_branches _n ((pat, body) : []) = do
+    (body', bs    , n' ) <- translateExpr bns _n body
+    (pat' , body'', n'') <- Success $ modify_branch n' pat body'
+    return ([pat'], bs, n'', [body''])
+  modify_branches _n ((pat, body) : xs) = do
+    (body', bs, n') <- translateExpr bns _n body
+    (rem_expr, bs', n'') <- translatePatCase bns n' var xs
+    (pat', body'', n''') <- Success $ modify_branch_or n'' pat body' rem_expr
+    return ([pat'], bs ++ bs', n''', [body''])
+  modify_branches _n [] = Success ([], [], _n, [])
 
 asVar
   :: [Name]

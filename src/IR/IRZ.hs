@@ -152,49 +152,85 @@ translated = IRZ
       (SVal (Var "v"))
       (Case
         (SVal (Var "v"))
-        [ ( CPatCTag "main" []
+        [ ( CPatCTag "testCase_" ["v0_pat"]
+          , Seq
+            (Ap "testCase_" [Var "v0_pat"])
+            (SVal (Var "testCase__res"))
+            (Seq (Update "x" (SVal (Var "testCase__res")))
+                 Empty
+                 (SExpr (Ap "#eval" [Var "testCase__res"]))
+            )
+          )
+        , ( CPatCTag "main" []
           , Seq
             (Ap "main" [])
             (SVal (Var "main_res"))
             (Seq (Update "x" (SVal (Var "main_res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "main_res"))))
+                 (SExpr (Ap "#eval" [Var "main_res"]))
             )
           )
-        , ( CPatCTag "countTo" ["v3_pat"]
+        , ( CPatCTag "intAdd__" ["a_pat", "b_pat"]
           , Seq
-            (Ap "countTo" [Var "v3_pat"])
-            (SVal (Var "countTo_res"))
-            (Seq (Update "x" (SVal (Var "countTo_res")))
+            (Ap "intAdd__" [Var "a_pat", Var "b_pat"])
+            (SVal (Var "intAdd___res"))
+            (Seq (Update "x" (SVal (Var "intAdd___res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "countTo_res"))))
+                 (SExpr (Ap "#eval" [Var "intAdd___res"]))
             )
           )
-        , ( CPatCTag "intAdd" ["a_pat", "b_pat"]
+        , ( CPatCTag "intPrint_" ["p_pat"]
           , Seq
-            (Ap "intAdd" [Var "a_pat", Var "b_pat"])
-            (SVal (Var "intAdd_res"))
-            (Seq (Update "x" (SVal (Var "intAdd_res")))
+            (Ap "intPrint_" [Var "p_pat"])
+            (SVal (Var "intPrint__res"))
+            (Seq (Update "x" (SVal (Var "intPrint__res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "intAdd_res"))))
+                 (SExpr (Ap "#eval" [Var "intPrint__res"]))
             )
           )
-        , ( CPatCTag "intPrint" ["p_pat"]
+        , ( CPatCTag "intGT__" ["c_pat", "d_pat"]
           , Seq
-            (Ap "intPrint" [Var "p_pat"])
-            (SVal (Var "intPrint_res"))
-            (Seq (Update "x" (SVal (Var "intPrint_res")))
+            (Ap "intGT__" [Var "c_pat", Var "d_pat"])
+            (SVal (Var "intGT___res"))
+            (Seq (Update "x" (SVal (Var "intGT___res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "intPrint_res"))))
+                 (SExpr (Ap "#eval" [Var "intGT___res"]))
             )
           )
-        , ( CPatCTag "intGT" ["c_pat", "d_pat"]
+        , ( CPatCTag "strConcat__" ["e_pat", "f_pat"]
           , Seq
-            (Ap "intGT" [Var "c_pat", Var "d_pat"])
-            (SVal (Var "intGT_res"))
-            (Seq (Update "x" (SVal (Var "intGT_res")))
+            (Ap "strConcat__" [Var "e_pat", Var "f_pat"])
+            (SVal (Var "strConcat___res"))
+            (Seq (Update "x" (SVal (Var "strConcat___res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "intGT_res"))))
+                 (SExpr (Ap "#eval" [Var "strConcat___res"]))
+            )
+          )
+        , ( CPatCTag "strLength_" ["g_pat"]
+          , Seq
+            (Ap "strLength_" [Var "g_pat"])
+            (SVal (Var "strLength__res"))
+            (Seq (Update "x" (SVal (Var "strLength__res")))
+                 Empty
+                 (SExpr (Ap "#eval" [Var "strLength__res"]))
+            )
+          )
+        , ( CPatCTag "strTake__" ["h_pat", "i_pat"]
+          , Seq
+            (Ap "strTake__" [Var "h_pat", Var "i_pat"])
+            (SVal (Var "strTake___res"))
+            (Seq (Update "x" (SVal (Var "strTake___res")))
+                 Empty
+                 (SExpr (Ap "#eval" [Var "strTake___res"]))
+            )
+          )
+        , ( CPatCTag "strDrop__" ["j_pat", "k_pat"]
+          , Seq
+            (Ap "strDrop__" [Var "j_pat", Var "k_pat"])
+            (SVal (Var "strDrop___res"))
+            (Seq (Update "x" (SVal (Var "strDrop___res")))
+                 Empty
+                 (SExpr (Ap "#eval" [Var "strDrop___res"]))
             )
           )
         , ( CPatCTag "showHeap" []
@@ -203,7 +239,7 @@ translated = IRZ
             (SVal (Var "showHeap_res"))
             (Seq (Update "x" (SVal (Var "showHeap_res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "showHeap_res"))))
+                 (SExpr (Ap "#eval" [Var "showHeap_res"]))
             )
           )
         , ( CPatCTag "error" []
@@ -212,11 +248,77 @@ translated = IRZ
             (SVal (Var "error_res"))
             (Seq (Update "x" (SVal (Var "error_res")))
                  Empty
-                 (SExpr (Unit (SVal (Var "error_res"))))
+                 (SExpr (Ap "#eval" [Var "error_res"]))
             )
           )
         , (CPatVar "_", SExpr (Unit (SVal (Var "v"))))
         ]
+      )
+    )
+  , Binding
+    "testCase_"
+    ["v0"]
+    (Seq
+      (Ap "#eval" [Var "v0"])
+      (SVal (Var "v0_eval"))
+      (Seq
+        (Expr
+          (Seq
+            (Expr
+              (Seq (Expr (SExpr (Store (SVal (Var "v0_eval")))))
+                   (SVal (Var "evalpatv1"))
+                   (SExpr (Ap "#eval" [Var "evalpatv1"]))
+              )
+            )
+            (SVal (Var "v1"))
+            (Case
+              (SVal (Var "v1"))
+              [ ( CPatCTag "#C#Str" ["v2"]
+                , Seq
+                  (Ap "#eval" [Var "v2"])
+                  (SVal (Var "v2_eval"))
+                  (Case
+                    (SVal (Var "v2"))
+                    [ ( CPatLit "Ja"
+                      , Seq
+                        (Expr
+                          (Seq (Expr (SExpr (Store (SVal (Lit "True")))))
+                               (SVal (Var "evalpatv3"))
+                               (SExpr (Ap "#eval" [Var "evalpatv3"]))
+                          )
+                        )
+                        (SVal (Var "v3"))
+                        (SExpr (Store (CTag "#C#Str" [Var "v3"])))
+                      )
+                    ]
+                  )
+                )
+              , ( CPatCTag "#C#Str" ["v4"]
+                , Seq
+                  (Ap "#eval" [Var "v4"])
+                  (SVal (Var "v4_eval"))
+                  (Case
+                    (SVal (Var "v4"))
+                    [ ( CPatLit "Nein"
+                      , Seq
+                        (Expr
+                          (Seq (Expr (SExpr (Store (SVal (Lit "False")))))
+                               (SVal (Var "evalpatv5"))
+                               (SExpr (Ap "#eval" [Var "evalpatv5"]))
+                          )
+                        )
+                        (SVal (Var "v5"))
+                        (SExpr (Store (CTag "#C#Str" [Var "v5"])))
+                      )
+                    ]
+                  )
+                )
+              ]
+            )
+          )
+        )
+        (SVal (Var "v6"))
+        (SExpr (Unit (SVal (Var "v6"))))
       )
     )
   , Binding
@@ -230,82 +332,24 @@ translated = IRZ
               (Expr
                 (Seq
                   (Expr
-                    (Seq (Expr (SExpr (Store (SVal (Lit "0")))))
-                         (SVal (Var "v0"))
-                         (SExpr (Ap "countTo" [Var "v0"]))
+                    (Seq (Expr (SExpr (Store (SVal (Lit "Nein")))))
+                         (SVal (Var "v7"))
+                         (SExpr (Store (CTag "#C#Str" [Var "v7"])))
                     )
                   )
-                  (SVal (Var "evalpatv1"))
-                  (SExpr (Ap "#eval" [Var "evalpatv1"]))
+                  (SVal (Var "evalpatv8"))
+                  (SExpr (Ap "#eval" [Var "evalpatv8"]))
                 )
               )
-              (SVal (Var "v1"))
-              (SExpr (Store (CTag "intPrint" [Var "v1"])))
+              (SVal (Var "v8"))
+              (SExpr (Store (CTag "testCase_" [Var "v8"])))
             )
           )
-          (SVal (Var "v2"))
-          (SExpr (Unit (SVal (Var "v2"))))
+          (SVal (Var "v9"))
+          (SExpr (Unit (SVal (Var "v9"))))
         )
       )
       (SVal (Var "main_toeval"))
       (SExpr (Ap "#eval" [Var "main_toeval"]))
-    )
-  , Binding
-    "countTo"
-    ["v3"]
-    (Seq
-      (Ap "#eval" [Var "v3"])
-      (SVal (Var "v3_eval"))
-      (Seq
-        (Expr
-          (Seq
-            (Expr
-              (Seq
-                (Expr
-                  (Seq
-                    (Expr (SExpr (Store (SVal (Var "v3_eval")))))
-                    (SVal (Var "v4"))
-                    (Seq (Expr (SExpr (Store (SVal (Lit "10")))))
-                         (SVal (Var "v5"))
-                         (SExpr (Ap "intGT" [Var "v4", Var "v5"]))
-                    )
-                  )
-                )
-                (SVal (Var "evalpatv6"))
-                (SExpr (Ap "#eval" [Var "evalpatv6"]))
-              )
-            )
-            (SVal (Var "v6"))
-            (Case
-              (SVal (Var "v6"))
-              [ (CPatTag "CTrue", SExpr (Store (SVal (Var "v3_eval"))))
-              , ( CPatTag "CFalse"
-                , Seq
-                  (Expr
-                    (Seq
-                      (Expr
-                        (Seq
-                          (Expr (SExpr (Store (SVal (Var "v3_eval")))))
-                          (SVal (Var "v7"))
-                          (Seq (Expr (SExpr (Store (SVal (Lit "1")))))
-                               (SVal (Var "v8"))
-                               (SExpr (Ap "intAdd" [Var "v7", Var "v8"]))
-                          )
-                        )
-                      )
-                      (SVal (Var "evalpatv9"))
-                      (SExpr (Ap "#eval" [Var "evalpatv9"]))
-                    )
-                  )
-                  (SVal (Var "v9"))
-                  (SExpr (Store (CTag "countTo" [Var "v9"])))
-                )
-              ]
-            )
-          )
-        )
-        (SVal (Var "v10"))
-        (SExpr (Unit (SVal (Var "v10"))))
-      )
     )
   ]

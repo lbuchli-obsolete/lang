@@ -9,7 +9,7 @@ import           Data.List                      ( sort )
 
 type Argument = ()
 type Priority = Int
-data Associativity = L | R
+data Associativity = L | R | None
   deriving (Eq, Show)
 data DeclType = Type | Function | Constructor
   deriving (Eq, Show)
@@ -45,6 +45,10 @@ parse s = first
     , FPDecl Function 1 L [Right "intGT", Left (), Left ()]
     , FPDecl Function 1 L [Right "showHeap"]
     , FPDecl Function 1 L [Right "intPrint", Left ()]
+    , FPDecl Function 1 L [Right "strLength", Left ()]
+    , FPDecl Function 1 L [Right "strConcat", Left (), Left ()]
+    , FPDecl Function 1 L [Right "strTake", Left (), Left ()]
+    , FPDecl Function 1 L [Right "strDrop", Left (), Left ()]
     , FPDecl Function 1 L [Right "error"]
     ]
 
@@ -87,10 +91,10 @@ pConstr = constr <$> (str "<=" *> pInfo) <*> pSign
   where constr (prio, assoc) sign = FPDecl Constructor prio assoc sign
 
 pInfo :: Parser String Error (Priority, Associativity)
-pInfo = str "[" *> info_defined <* str "]" <* ws <|> ws *> pure (1, L)
+pInfo = str "[" *> info_defined <* str "]" <* ws <|> ws *> pure (1, None)
  where
   info_defined =
-    (,) <$> prio <*> assoc <|> (,) 1 <$> assoc <|> (\x -> (x, L)) <$> prio
+    (,) <$> prio <*> assoc <|> (,) 1 <$> assoc <|> (\x -> (x, None)) <$> prio
   prio  = read <$> many (anyOf "012356789")
   assoc = str "L" *> pure L <|> str "R" *> pure R
 

@@ -201,11 +201,15 @@ generateEval fs = Z.Binding
       (Z.SVal $ Z.Var "v")
       (  match_fs fs
       ++ match_fs
-           [ ("intAdd"  , ["a", "b"])
-           , ("intPrint", ["p"])
-           , ("intGT"   , ["c", "d"])
-           , ("showHeap", [])
-           , ("error"   , [])
+           [ ("intAdd__"   , ["a", "b"])
+           , ("intPrint_"  , ["p"])
+           , ("intGT__"    , ["c", "d"])
+           , ("strConcat__", ["e", "f"])
+           , ("strLength_" , ["g"])
+           , ("strTake__"  , ["h", "i"])
+           , ("strDrop__"  , ["j", "k"])
+           , ("showHeap"   , [])
+           , ("error"      , [])
            ]
       ++ [(Z.CPatVar "_", Z.SExpr $ Z.Unit (Z.SVal $ Z.Var "v"))]
       )

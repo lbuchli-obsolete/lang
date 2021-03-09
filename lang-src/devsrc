@@ -1,2 +1,28 @@
-:: 'main'
-:= intAdd 2 3
+<> '[' a:* ']'
+<= 'Cons' x:a tail:([ a ])
+<= 'Nil'
+
+:: 'sum' list:([ Int ]) -> Int
+:= case list of
+  (Cons x other) => x + (sum other)
+  Nil => 0
+
+:: a:Int '+' b:Int -> Int
+:= intAdd a b
+
+:: a:Int '>' b:Int -> Bool
+:= intGT a b
+
+:: 'length' list:([ ? ]) -> Int
+:= case list of
+  (Cons _ other) => 1 + (length other)
+  Nil => 0
+
+:: 'upto' n:Int -> [ Int ]
+:= case n of
+  0 => Nil
+  _ => Cons n (upto (n + -1))
+
+:: 'main' -> [ Int ]
+:= list <- Cons 3 (Cons 4 (Cons 12 Nil))
+   sum list

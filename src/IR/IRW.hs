@@ -13,6 +13,7 @@ type Name = String
 data FuncDef = FuncDef {
   _bname :: Name,
   _bargs :: [(Name, Typed)],
+  _breturntype :: Typed,
   _bconstraints :: [Typed],
   _bbody :: Typed
 } deriving Show
@@ -34,7 +35,12 @@ data Type = TUnknown
           | TStr
           | TInt
           | TBool
-          | RTT Name [Typed]
+          | TypeType
+          | TAny
+          | TFn [Typed] Typed
+          | RTT Name [Typed] -- This is confusing as it suggests that the type gets
+          -- checked at runtime even though it doesn't, in the next iteration, this
+          -- should be named differently
  deriving Show
 
 data Constr = CInt Int
@@ -44,10 +50,9 @@ data Constr = CInt Int
  deriving Show
 
 data Expr = Seq Typed Pat Typed
-          | Lambda Pat Typed
+          | Lambda [Pat] Typed
           | Case Typed [(Pat, Typed)]
           | Ap Typed [Typed]
-          | Constr Name [Typed]
           | Var Name
  deriving Show
 
@@ -63,10 +68,10 @@ data Typed = TExpr Type Expr
  deriving Show
 
 translate :: IRW -> Result String X.IRX
-translate irw = typeCheck irw >>= translate_irw
+translate irw = Trace ("IRW:: " ++ show irw) $ typeCheck irw >>= translate_irw
  where
   translate_irw (IRW _ fds) = X.IRX <$> mapM translate_funcdef fds
-  translate_funcdef (FuncDef name args _ body) =
+  translate_funcdef (FuncDef name args _ _ body) =
     (\body' -> X.Binding name (map fst args) body') <$> translateTyped body
 
 translateTyped :: Typed -> Result String X.Expr
@@ -79,6 +84,9 @@ translateType TUnknown     = Error "Unknown type used as value"
 translateType TStr         = Success (X.Tag "#Str")
 translateType TInt         = Success (X.Tag "#Int")
 translateType TBool        = Success (X.Tag "#Bool")
+translateType TypeType     = Success (X.Tag "#Type")
+translateType TAny         = Success (X.Tag "#Any") -- TODO should this be a variable in order to match everything?
+translateType (TFn _ _   ) = Success (X.Tag "#Fn") -- TODO match dependent on types
 translateType (RTT n args) = X.CTag n <$> mapM translateTyped args
 
 translateExpr :: Expr -> Result String X.Expr
@@ -87,10 +95,10 @@ translateExpr (Seq a pat b) = do
   pat' <- translatePat pat
   b'   <- translateTyped b
   return (X.Seq a' pat' b')
-translateExpr (Lambda pat b) = do
-  pat' <- translatePat pat
-  b'   <- translateTyped b
-  return (X.Lambda pat' b')
+translateExpr (Lambda pats b) = do
+  pats' <- mapM translatePat pats
+  b'    <- translateTyped b
+  return (X.Lambda pats' b')
 translateExpr (Case v matches) = do
   v'         <- translateTyped v
   match_pats <- mapM translatePat (map fst matches)
@@ -100,14 +108,14 @@ translateExpr (Ap f args) = do
   f'    <- translateTyped f
   args' <- mapM translateTyped args
   return (X.Ap f' args')
-translateExpr (Constr c args) = X.CTag c <$> mapM translateTyped args
-translateExpr (Var n        ) = Success (X.Var n)
+translateExpr (Var n) = Success (X.Var n)
 
 translateConstr :: Constr -> Result String X.Expr
 translateConstr (CInt x) = Success $ X.CTag "#C#Int" [X.Lit $ show x]
 translateConstr (CStr s) = Success $ X.CTag "#C#Str" [X.Lit $ s]
 translateConstr (CBool b) =
   Success $ X.Tag ("#C#Bool#" ++ if b then "True" else "False")
+translateConstr (RTC name []) = Success $ X.Tag name
 translateConstr (RTC name ts) = X.CTag name <$> mapM translateTyped ts
 
 translatePat :: Pat -> Result String X.Pat
