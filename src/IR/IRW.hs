@@ -11,11 +11,8 @@ type Lit = String
 type Name = String
 
 data FuncDef = FuncDef {
-  _bname :: Name,
-  _bargs :: [(Name, Typed)],
-  _breturntype :: Typed,
-  _bconstraints :: [Typed],
-  _bbody :: Typed
+  _fsig :: FuncSig,
+  _fbody :: Typed
 } deriving Show
 
 data TypeDef = TypeDef {
@@ -29,6 +26,25 @@ data ConstrDef = ConstrDef {
   _cname :: Name,
   _cargs :: [(Name, Typed)],
   _cconstraints :: [Typed]
+} deriving Show
+
+data ExistentialDef = ExistentialDef {
+  _ename :: Name,
+  _eargs :: [(Name, Typed)],
+  _esigs :: [FuncSig]
+} deriving Show
+
+data ExistentialInstance = ExistentialInstance {
+  _iname :: Name,
+  _iargs :: [Typed],
+  _ifuncs :: [FuncDef]
+}
+
+data FuncSig = FuncSig {
+  _fname :: Name,
+  _fargs :: [(Name, Typed)],
+  _freturntype :: Typed,
+  _fconstraints :: [Typed]
 } deriving Show
 
 data Type = TUnknown
@@ -71,7 +87,7 @@ translate :: IRW -> Result String X.IRX
 translate irw = Trace ("IRW:: " ++ show irw) $ typeCheck irw >>= translate_irw
  where
   translate_irw (IRW _ fds) = X.IRX <$> mapM translate_funcdef fds
-  translate_funcdef (FuncDef name args _ _ body) =
+  translate_funcdef (FuncDef (FuncSig name args _ _) body) =
     (\body' -> X.Binding name (map fst args) body') <$> translateTyped body
 
 translateTyped :: Typed -> Result String X.Expr

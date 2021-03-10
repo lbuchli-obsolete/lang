@@ -1,3 +1,7 @@
+-- imports are relative to the project root (the folder of the first parsed file)
+import "devsrc" -- imports all declarations from devsrc
+import "devsrc" (sum_, upto_, _+_) -- imports only the given names from devsrc
+
 -- Line comment
 -- Function declaration with parsing priority
 -- the ':|' is a constraint on the arguments (gets typechecked)
@@ -15,6 +19,18 @@
 <= t ':' ([ t ])
 <=| t == Bool
 <= '[]'
+
+-- Existential type
+E> 'Functor' f:(* -> *)
+E= 'map' g:(a -> b) o:(f a) -> f b
+
+-- Existential type instances
+E: Functor [_] {
+  :: 'map' g:(a -> b) o:([ a ]) -> [ b ]
+  := case o of
+    Cons x other => Cons (g x) (map g other)
+    Nil => Nil
+}
 
 -- a
 --   b

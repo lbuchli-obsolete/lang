@@ -12,7 +12,9 @@ import           Parse.ParserPass1              ( FPIRW
 import           Data.Bifunctor                 ( first
                                                 , bimap
                                                 )
-import           Data.Either                    ( partitionEithers )
+import           Data.Either                    ( partitionEithers
+                                                , isLeft
+                                                )
 import           Control.Monad                  ( void )
 import           Control.Applicative
 import           Parse.ParserLib
@@ -63,7 +65,7 @@ pFuncDecl fps = -- TODO parse constraints
     <*> (pKeyword ":=" *> pTyped fps)
  where
   assemble_func (name, args) returntype constraints body =
-    FuncDef name args returntype constraints body
+    FuncDef (FuncSig name args returntype constraints) body
 
 pSignature :: FPIRW -> Parser String Error (Name, [(Name, Typed)])
 pSignature fps = assemble_sig . reverse <$> some -- I have no idea why the reverse is necessary
@@ -130,7 +132,7 @@ pLiteral =
     <?> "Cannot parse literal"
 
 -- build a parser for any FPDecl
--- todo also build for compact form (+ -> _+_)
+-- TODO also build for compact form (+ -> _+_)
 bpFPDecl :: FPIRW -> FPDecl -> Parser String Error Typed
 -- Right associative
 bpFPDecl fps (FPDecl t _ R (Left () : sign)) = undefined
@@ -149,14 +151,17 @@ bpSignature
   -> Signature
   -> (FPIRW -> Parser String Error a)
   -> (Name, Parser String Error [a])
-bpSignature fps sign f = (sign_id, sign_parser)
+bpSignature fps sign f =
+  (sign_id, sign_parser sign_mapped <|> sign_parser sign_compact)
  where
   sign_mapped = map (bimap (const $ f fps) (\s -> pKeyword s)) sign
-  sign_parser = foldr
+  sign_parser _sign = foldr
     (\x prev -> either (\arg -> (:) <$> arg <*> prev) (\sym -> sym *> prev) x)
     (const [] <$> pEmpty)
-    sign_mapped
-  sign_id = foldl (\prev x -> prev ++ either (\_ -> "_") id x) "" sign
+    _sign
+  sign_compact   = Right (pKeyword sign_id) : args_only_sign
+  args_only_sign = map (const $ Left $ f fps) (filter isLeft sign)
+  sign_id        = foldl (\prev x -> prev ++ either (\_ -> "_") id x) "" sign
 
 pCase :: FPIRW -> Parser String Error Expr
 pCase fps =
